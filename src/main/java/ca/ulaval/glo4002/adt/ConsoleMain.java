@@ -1,5 +1,13 @@
 package ca.ulaval.glo4002.adt;
 
+import ca.ulaval.glo4002.adt.applicationService.PatientService;
+import ca.ulaval.glo4002.adt.context.ServiceLocator;
+import ca.ulaval.glo4002.adt.domain.Patient;
+import ca.ulaval.glo4002.adt.domain.PatientFactory;
+import ca.ulaval.glo4002.adt.interfaces.PatientRepository;
+import ca.ulaval.glo4002.adt.persistence.EntityManagerProvider;
+import ca.ulaval.glo4002.adt.persistence.HibernatePatientRepository;
+
 import java.util.Collection;
 import java.util.Scanner;
 
@@ -12,7 +20,9 @@ public class ConsoleMain {
 
 	public static void main(String[] args) {
 		initializeServiceLocator();
-		fillDatabase();
+		initializeEntityManagerProvider();
+		PatientService patientService = ServiceLocator.INSTANCE.resolve(PatientService.class);
+		patientService.fillDatabase();
 
 		try (Scanner scanner = new Scanner(System.in)) {
 			ConsoleMain.scanner = scanner;
@@ -23,29 +33,15 @@ public class ConsoleMain {
 	}
 
 	private static void initializeServiceLocator() {
-		ServiceLocator.INSTANCE.register(HibernatePatientRepository.class, new HibernatePatientRepository());
+		ServiceLocator.INSTANCE.register(PatientRepository.class, new HibernatePatientRepository());
 		ServiceLocator.INSTANCE.register(EntityManagerFactory.class, Persistence.createEntityManagerFactory("adt"));
+		ServiceLocator.INSTANCE.register(PatientService.class, new PatientService(new PatientFactory()));
 	}
 
-	private static void fillDatabase() {
-		HibernatePatientRepository patientRepository = ServiceLocator.INSTANCE
-				.resolve(HibernatePatientRepository.class);
-
-		// TODO find a way to encapsulate this, it is repeated everywhere
+	private static void initializeEntityManagerProvider() {
 		EntityManagerFactory entityManagerFactory = ServiceLocator.INSTANCE.resolve(EntityManagerFactory.class);
 		EntityManager entityManager = entityManagerFactory.createEntityManager();
 		EntityManagerProvider.setEntityManager(entityManager);
-
-		entityManager.getTransaction().begin();
-
-		Patient pierre = new Patient("Pierre");
-		patientRepository.persist(pierre);
-
-		Patient marie = new Patient("Marie");
-		marie.moveToDepartment("ICU");
-		patientRepository.persist(marie);
-
-		entityManager.getTransaction().commit();
 	}
 
 	private static void startCommandPromptLoop() {
@@ -96,15 +92,8 @@ public class ConsoleMain {
 	}
 
 	private static void displayPatientList() {
-		HibernatePatientRepository patientRepository = ServiceLocator.INSTANCE
-				.resolve(HibernatePatientRepository.class);
-
-		// TODO find a way to encapsulate this, it is repeated everywhere
-		EntityManagerFactory entityManagerFactory = ServiceLocator.INSTANCE.resolve(EntityManagerFactory.class);
-		EntityManager entityManager = entityManagerFactory.createEntityManager();
-		EntityManagerProvider.setEntityManager(entityManager);
-
-		Collection<Patient> patients = patientRepository.findAll();
+		PatientService patientService = ServiceLocator.INSTANCE.resolve(PatientService.class);
+		Collection<Patient> patients = patientService.listPatients();
 
 		for (Patient patient : patients) {
 			System.out.println(String.format("%d : %s (status = %s, department = %s)", patient.getId(),
@@ -116,45 +105,25 @@ public class ConsoleMain {
 		System.out.println("First, you must select a patient : ");
 		displayPatientList();
 
-		// TODO find a way to encapsulate this, it is repeated everywhere
-		HibernatePatientRepository patientRepository = ServiceLocator.INSTANCE
-				.resolve(HibernatePatientRepository.class);
-		EntityManagerFactory entityManagerFactory = ServiceLocator.INSTANCE.resolve(EntityManagerFactory.class);
-		EntityManager entityManager = entityManagerFactory.createEntityManager();
-		EntityManagerProvider.setEntityManager(entityManager);
-
 		System.out.print("Patient ID to move : ");
 		int patientId = Integer.parseInt(scanner.nextLine());
 
 		System.out.print("New department : ");
 		String newDepartment = scanner.nextLine();
 
-		entityManager.getTransaction().begin();
-		Patient patient = patientRepository.findById(patientId);
-		patient.moveToDepartment(newDepartment);
-		patientRepository.persist(patient);
-		entityManager.getTransaction().commit();
+		PatientService patientService = ServiceLocator.INSTANCE.resolve(PatientService.class);
+		patientService.movePatient(patientId, newDepartment);
 	}
 	
 	private static void dischargePatient() {
 		System.out.println("First, you must select a patient : ");
 		displayPatientList();
 
-		// TODO find a way to encapsulate this, it is repeated everywhere
-		HibernatePatientRepository patientRepository = ServiceLocator.INSTANCE
-				.resolve(HibernatePatientRepository.class);
-		EntityManagerFactory entityManagerFactory = ServiceLocator.INSTANCE.resolve(EntityManagerFactory.class);
-		EntityManager entityManager = entityManagerFactory.createEntityManager();
-		EntityManagerProvider.setEntityManager(entityManager);
-
 		System.out.print("Patient ID to discharge : ");
 		int patientId = Integer.parseInt(scanner.nextLine());
 
-		entityManager.getTransaction().begin();
-		Patient patient = patientRepository.findById(patientId);
-		patient.discharge();
-		patientRepository.persist(patient);
-		entityManager.getTransaction().commit();
+		PatientService patientService = ServiceLocator.INSTANCE.resolve(PatientService.class);
+		patientService.dischargePatient(patientId);
 	}
 
 }
